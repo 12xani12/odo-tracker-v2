@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Odometer Tracker</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#007bff" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+  h1 { color: #007bff; }
+  input, select, button { margin: 5px 0; padding: 8px; font-size: 1em; }
+  #main { display: none; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+  th { background-color: #007bff; color: white; }
+  #resetBtn { margin-top: 15px; background-color: #dc3545; color: white; border: none; cursor: pointer; }
+  #resetBtn:hover { background-color: #c82333; }
+</style>
+</head>
+<body>
+  <h1>Odometer Tracker</h1>
+  <div id="setup">
+    <h2>Initial Setup</h2>
+    <label>Driver Name (optional):<br /><input type="text" id="driverName" placeholder="Driver Name" /></label><br />
+    <label>Car Type:<br /><input type="text" id="carType" placeholder="e.g., Toyota Hilux" required /></label><br />
+    <label>Number Plate:<br /><input type="text" id="numberPlate" placeholder="e.g., ABC-123" required /></label><br />
+    <button onclick="saveSetup()">Save Setup</button>
+  </div>
+  <div id="main">
+    <h2>Log a Drive</h2>
+    <label>Start KM:<br /><input type="number" id="startKM" /></label><br />
+    <label>End KM:<br /><input type="number" id="endKM" /></label><br />
+    <label>Trip Description:<br />
+      <select id="description">
+        <option value="" disabled selected>Select description</option>
+        <option value="Home to Work">Home to Work</option>
+        <option value="Work to Home">Work to Home</option>
+        <option value="Other">Other</option>
+      </select>
+    </label><br />
+    <button onclick="logDrive()">Add Drive</button>
+    <h3>Trip History</h3>
+    <table>
+      <thead>
+        <tr><th>Start KM</th><th>End KM</th><th>Distance</th><th>Description</th></tr>
+      </thead>
+      <tbody id="logTable"></tbody>
+    </table>
+    <button onclick="downloadExcel()">Download Excel Log</button>
+    <button id="resetBtn" onclick="resetAll()">Reset All Data</button>
+  </div>
+<script>
+  let tripLogs = JSON.parse(localStorage.getItem("tripLogs") || "[]");
+  let setupInfo = JSON.parse(localStorage.getItem("setupInfo") || "null");
+
+  function saveSetup() {
+    const driverName = document.getElementById("driverName").value.trim();
+    const carType = document.getElementById("carType").value.trim();
+    const numberPlate = document.getElementById("numberPlate").value.trim();
+    if (!carType || !numberPlate) return alert("Car type and number plate are required.");
+    setupInfo = { driverName, carType, numberPlate };
+    localStorage.setItem("setupInfo", JSON.stringify(setupInfo));
+    document.getElementById("setup").style.display = "none";
+    document.getElementById("main").style.display = "block";
+    renderTable();
+  }
+
+  function logDrive() {
+    const startKM = parseFloat(document.getElementById("startKM").value);
+    const endKM = parseFloat(document.getElementById("endKM").value);
+    const description = document.getElementById("description").value;
+    if (isNaN(startKM) || isNaN(endKM) || !description) return alert("Please fill out all fields correctly.");
+    if (endKM < startKM) return alert("End KM must be greater than or equal to Start KM.");
+    const distance = endKM - startKM;
+    tripLogs.push({ startKM, endKM, distance, description });
+    localStorage.setItem("tripLogs", JSON.stringify(tripLogs));
+    document.getElementById("startKM").value = "";
+    document.getElementById("endKM").value = "";
+    document.getElementById("description").selectedIndex = 0;
+    renderTable();
+  }
+
+  function renderTable() {
+    const table = document.getElementById("logTable");
+    table.innerHTML = "";
+    tripLogs.forEach(entry => {
+      const row = `<tr>
+        <td>${entry.startKM}</td>
+        <td>${entry.endKM}</td>
+        <td>${entry.distance}</td>
+        <td>${entry.description}</td>
+      </tr>`;
+      table.innerHTML += row;
+    });
+  }
+
+  function downloadExcel() {
+    if (!tripLogs.length) return alert("No data to export.");
+    const wb = XLSX.utils.book_new();
+    const wsData = [
+      ["Driver", setupInfo.driverName || "N/A"],
+      ["Car Type", setupInfo.carType],
+      ["Number Plate", setupInfo.numberPlate],
+      [],
+      ["Start KM", "End KM", "Distance", "Description"],
+      ...tripLogs.map(e => [e.startKM, e.endKM, e.distance, e.description])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, "Trip Log");
+    XLSX.writeFile(wb, "odometer_log.xlsx");
+  }
+
+  function resetAll() {
+    if (confirm("Are you sure you want to clear all data?")) {
+      localStorage.clear();
+      location.reload();
+    }
+  }
+
+  if (setupInfo) {
+    document.getElementById("setup").style.display = "none";
+    document.getElementById("main").style.display = "block";
+    renderTable();
+  }
+
+  // Service worker registration for PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js')
+      .then(() => console.log('Service Worker Registered'))
+      .catch((error) => console.error('Service Worker registration failed:', error));
+  }
+</script>
+</body>
+</html>
